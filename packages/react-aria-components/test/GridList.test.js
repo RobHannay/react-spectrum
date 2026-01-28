@@ -898,6 +898,90 @@ describe('GridList', () => {
     }
   });
 
+  describe('controlled selection', () => {
+    it('should support shift+click range selection with controlled selectedKeys', async () => {
+      // This test verifies the fix for shift+click range selection in controlled mode.
+      // The issue was that when consumers pass a plain Set as selectedKeys,
+      // the anchorKey/currentKey were lost, breaking range selection.
+      function ControlledGridList() {
+        let [selected, setSelected] = React.useState(new Set());
+        return (
+          <GridList
+            aria-label="Test"
+            selectionMode="multiple"
+            selectedKeys={selected}
+            onSelectionChange={setSelected}>
+            <GridListItem id="1" textValue="Item 1">Item 1</GridListItem>
+            <GridListItem id="2" textValue="Item 2">Item 2</GridListItem>
+            <GridListItem id="3" textValue="Item 3">Item 3</GridListItem>
+            <GridListItem id="4" textValue="Item 4">Item 4</GridListItem>
+          </GridList>
+        );
+      }
+
+      let {getByRole, getAllByRole} = render(<ControlledGridList />);
+      let gridlist = getByRole('grid');
+      let rows = getAllByRole('row');
+
+      // Click item 1 to select it (this sets the anchor)
+      await user.click(rows[0]);
+      expect(rows[0]).toHaveAttribute('aria-selected', 'true');
+      expect(rows[1]).toHaveAttribute('aria-selected', 'false');
+      expect(rows[2]).toHaveAttribute('aria-selected', 'false');
+      expect(rows[3]).toHaveAttribute('aria-selected', 'false');
+
+      // Shift+click item 4 - should select range 1-4
+      await user.keyboard('{Shift>}');
+      await user.click(rows[3]);
+      await user.keyboard('{/Shift}');
+
+      // All items 1-4 should be selected (range selection)
+      expect(rows[0]).toHaveAttribute('aria-selected', 'true');
+      expect(rows[1]).toHaveAttribute('aria-selected', 'true');
+      expect(rows[2]).toHaveAttribute('aria-selected', 'true');
+      expect(rows[3]).toHaveAttribute('aria-selected', 'true');
+    });
+
+    it('should support shift+arrow key range selection with controlled selectedKeys', async () => {
+      function ControlledGridList() {
+        let [selected, setSelected] = React.useState(new Set());
+        return (
+          <GridList
+            aria-label="Test"
+            selectionMode="multiple"
+            selectedKeys={selected}
+            onSelectionChange={setSelected}>
+            <GridListItem id="1" textValue="Item 1">Item 1</GridListItem>
+            <GridListItem id="2" textValue="Item 2">Item 2</GridListItem>
+            <GridListItem id="3" textValue="Item 3">Item 3</GridListItem>
+            <GridListItem id="4" textValue="Item 4">Item 4</GridListItem>
+          </GridList>
+        );
+      }
+
+      let {getByRole, getAllByRole} = render(<ControlledGridList />);
+      let gridlist = getByRole('grid');
+      let rows = getAllByRole('row');
+
+      // Focus and select item 1
+      await user.click(rows[0]);
+      expect(rows[0]).toHaveAttribute('aria-selected', 'true');
+
+      // Shift+ArrowDown to extend selection to item 2
+      await user.keyboard('{Shift>}{ArrowDown}{/Shift}');
+      expect(rows[0]).toHaveAttribute('aria-selected', 'true');
+      expect(rows[1]).toHaveAttribute('aria-selected', 'true');
+      expect(rows[2]).toHaveAttribute('aria-selected', 'false');
+
+      // Shift+ArrowDown again to extend selection to item 3
+      await user.keyboard('{Shift>}{ArrowDown}{/Shift}');
+      expect(rows[0]).toHaveAttribute('aria-selected', 'true');
+      expect(rows[1]).toHaveAttribute('aria-selected', 'true');
+      expect(rows[2]).toHaveAttribute('aria-selected', 'true');
+      expect(rows[3]).toHaveAttribute('aria-selected', 'false');
+    });
+  });
+
   describe('drag and drop', () => {
     it('should support drag button slot', () => {
       let {getAllByRole} = render(<DraggableGridList />);

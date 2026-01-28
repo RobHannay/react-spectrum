@@ -14,7 +14,7 @@ import {DisabledBehavior, FocusStrategy, Key, MultipleSelection, SelectionBehavi
 import {MultipleSelectionState} from './types';
 import {Selection} from './Selection';
 import {useControlledState} from '@react-stately/utils';
-import {useEffect, useMemo, useRef, useState} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 
 function equalSets(setA, setB) {
   if (setA.size !== setB.size) {
@@ -58,13 +58,37 @@ export function useMultipleSelectionState(props: MultipleSelectionStateProps): M
   let focusedKeyRef = useRef<Key | null>(null);
   let childFocusStrategyRef = useRef<FocusStrategy | null>(null);
   let [, setFocusedKey] = useState<Key | null>(null);
+  // Store anchorKey and currentKey separately so they persist even when
+  // selectedKeys is controlled and the consumer passes back a plain Set.
+  let anchorKeyRef = useRef<Key | null>(null);
+  let currentKeyRef = useRef<Key | null>(null);
+
   let selectedKeysProp = useMemo(() => convertSelection(props.selectedKeys), [props.selectedKeys]);
   let defaultSelectedKeys = useMemo(() => convertSelection(props.defaultSelectedKeys, new Selection()), [props.defaultSelectedKeys]);
-  let [selectedKeys, setSelectedKeys] = useControlledState(
+  let [selectedKeys, _setSelectedKeys] = useControlledState(
     selectedKeysProp,
     defaultSelectedKeys!,
     props.onSelectionChange
   );
+
+  // Wrap setSelectedKeys to track anchorKey and currentKey internally
+  let setSelectedKeys = useCallback((keys: 'all' | Set<Key>) => {
+    if (keys instanceof Selection) {
+      anchorKeyRef.current = keys.anchorKey;
+      currentKeyRef.current = keys.currentKey;
+    }
+    _setSelectedKeys(keys);
+  }, [_setSelectedKeys]);
+
+  // Restore anchorKey and currentKey when selectedKeys is a plain Set from controlled mode.
+  // This ensures shift+click range selection works correctly with controlled selection.
+  if (selectedKeys !== 'all' && !(selectedKeys instanceof Selection)) {
+    selectedKeys = new Selection(selectedKeys, anchorKeyRef.current, currentKeyRef.current);
+  } else if (selectedKeys instanceof Selection) {
+    // Update refs if selectedKeys already has anchor/current (e.g. from internal state)
+    anchorKeyRef.current = selectedKeys.anchorKey;
+    currentKeyRef.current = selectedKeys.currentKey;
+  }
   let disabledKeysProp = useMemo(() =>
     props.disabledKeys ? new Set(props.disabledKeys) : new Set<Key>()
   , [props.disabledKeys]);
